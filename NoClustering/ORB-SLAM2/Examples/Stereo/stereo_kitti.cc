@@ -76,8 +76,8 @@ int main(int argc, char **argv)
     for(int ni=0; ni<nImages; ni++)
     {
         // Read left and right images from file
-        imLeft = cv::imread(vstrImageLeft[ni],CV_LOAD_IMAGE_UNCHANGED);
-        imRight = cv::imread(vstrImageRight[ni],CV_LOAD_IMAGE_UNCHANGED);
+        imLeft = cv::imread(vstrImageLeft[ni],cv::IMREAD_UNCHANGED);
+        imRight = cv::imread(vstrImageRight[ni],cv::IMREAD_UNCHANGED);
         double tframe = vTimestamps[ni];
 
         if(imLeft.empty())
@@ -136,7 +136,10 @@ int main(int argc, char **argv)
     cout << "max tracking time: " << vTimesTrack[vTimesTrack.size()-1] << endl;
 
     // Save camera trajectory
-    SLAM.SaveTrajectoryKITTI("CameraTrajectory.txt");
+
+    SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory.txt");
+    SLAM.SaveTrajectoryKITTI("CameraTrajectory_KITTI.txt");
+    SLAM.SaveTrajectoryTUM("CameraTrajectory_TUM.txt");
 
     return 0;
 }
@@ -176,3 +179,4 @@ void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft,
         vstrImageRight[i] = strPrefixRight + ss.str() + ".png";
     }
 }
+

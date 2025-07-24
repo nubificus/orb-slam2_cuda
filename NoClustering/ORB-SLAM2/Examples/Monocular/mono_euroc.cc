@@ -70,7 +70,7 @@ int main(int argc, char **argv)
     for(int ni=0; ni<nImages; ni++)
     {
         // Read image from file
-        im = cv::imread(vstrImageFilenames[ni],CV_LOAD_IMAGE_UNCHANGED);
+        im = cv::imread(vstrImageFilenames[ni],cv::IMREAD_UNCHANGED);
         double tframe = vTimestamps[ni];
 
         if(im.empty())
@@ -125,8 +125,10 @@ int main(int argc, char **argv)
     cout << "mean tracking time: " << totaltime/nImages << endl;
 
     // Save camera trajectory
-    SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory.txt");
-
+    SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory.txt"); 
+    SLAM.SaveTrajectoryKITTI("CameraTrajectory_KITTI.txt");
+    SLAM.SaveTrajectoryTUM("CameraTrajectory_TUM.txt");
+    
     return 0;
 }
 
@@ -153,3 +155,4 @@ void LoadImages(const string &strImagePath, const string &strPathTimes,
         }
     }
 }
+
