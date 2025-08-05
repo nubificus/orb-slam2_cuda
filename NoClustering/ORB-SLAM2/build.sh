@@ -17,10 +17,15 @@ make -j
 
 cd ../../../
 
-echo "Uncompress vocabulary ..."
+echo "Download vocabulary ..."
 
+mkdir -p Vocabulary
 cd Vocabulary
-tar -xf ORBvoc.txt.tar.gz
+if [ -f "ORBvoc.txt" ]; then
+  echo "Vocabulary file exists."
+else
+    wget https://s3.nbfc.io/orb/ORBvoc.txt
+fi
 cd ..
 
 echo "Configuring and building ORB_SLAM2 ..."

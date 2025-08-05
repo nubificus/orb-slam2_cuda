@@ -64,7 +64,8 @@ ${PROJECT_SOURCE_DIR}/include
 ${Pangolin_INCLUDE_DIRS}
 )
 
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY lib)
+# set(CMAKE_LIBRARY_OUTPUT_DIRECTORY lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 cuda_include_directories(
   ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc
@@ -108,44 +109,89 @@ nvToolsExt
 Eigen3::Eigen
 )
 
-# Build examples
-if(NO_EXAMPLES)
-message(STATUS "Don't build examples")
-else ()
-message(STATUS "Build examples")
+option(VACCEL "Enable VACCEL support" OFF)
+if (VACCEL)
+  message(STATUS "Building with VACCEL support")
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/RGB-D)
+  target_link_libraries(${PROJECT_NAME} vaccel)
 
-add_executable(rgbd_tum
-        Examples/RGB-D/rgbd_tum.cc)
-target_link_libraries(rgbd_tum ${PROJECT_NAME})
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo)
+  set(SOURCES
+      Examples/Stereo/stereo_kitti.cc
+      src/wrap/wrapper.cpp
+      src/wrap/utils.hpp
+  )
 
-add_executable(stereo_kitti
-        Examples/Stereo/stereo_kitti.cc)
-target_link_libraries(stereo_kitti ${PROJECT_NAME})
+  add_library(liborb SHARED ${SOURCES})
 
-add_executable(stereo_euroc
-        Examples/Stereo/stereo_euroc.cc)
-target_link_libraries(stereo_euroc ${PROJECT_NAME})
+  target_link_libraries(liborb
+    ${OpenCV_LIBS}
+    ${Pangolin_LIBRARIES}
+    ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
+    ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
+    Eigen3::Eigen
+    vaccel
+    nvToolsExt
+    pthread
+  )
+
+  set_target_properties(liborb PROPERTIES
+    OUTPUT_NAME "orb"
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+  )
+
+  add_compile_definitions(VACCEL)
+  target_compile_options(liborb PRIVATE -O3)
+
+  add_executable(Test ${SOURCES})
+
+  target_link_libraries(Test PRIVATE
+  ${PROJECT_NAME}
+  vaccel -pthread
+  )
+else()
+
+  # Build examples
+  if(NO_EXAMPLES)
+    message(STATUS "Don't build examples")
+  else ()
+    message(STATUS "Build examples")
+
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/RGB-D)
+
+    add_executable(rgbd_tum
+            Examples/RGB-D/rgbd_tum.cc)
+    target_link_libraries(rgbd_tum ${PROJECT_NAME})
+
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo)
+
+    add_executable(stereo_kitti
+            Examples/Stereo/stereo_kitti.cc)
+    target_link_libraries(stereo_kitti ${PROJECT_NAME})
+
+    add_executable(stereo_euroc
+            Examples/Stereo/stereo_euroc.cc)
+    target_link_libraries(stereo_euroc ${PROJECT_NAME})
 
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Monocular)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Monocular)
 
-add_executable(mono_tum
-        Examples/Monocular/mono_tum.cc)
-target_link_libraries(mono_tum ${PROJECT_NAME})
+    add_executable(mono_tum
+            Examples/Monocular/mono_tum.cc)
+    target_link_libraries(mono_tum ${PROJECT_NAME})
 
-add_executable(mono_kitti
-        Examples/Monocular/mono_kitti.cc)
-target_link_libraries(mono_kitti ${PROJECT_NAME})
+    add_executable(mono_kitti
+            Examples/Monocular/mono_kitti.cc)
+    target_link_libraries(mono_kitti ${PROJECT_NAME})
 
-add_executable(mono_euroc
-        Examples/Monocular/mono_euroc.cc)
-target_link_libraries(mono_euroc ${PROJECT_NAME})
+    add_executable(mono_euroc
+            Examples/Monocular/mono_euroc.cc)
+    target_link_libraries(mono_euroc ${PROJECT_NAME})
 
-endif() # Build Examples
+  endif() # Build Examples
+endif()
 
 unset(CMAKE_RUNTIME_OUTPUT_DIRECTORY)
 

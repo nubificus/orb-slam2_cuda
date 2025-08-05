@@ -17,15 +17,24 @@ make -j
 
 cd ../../../
 
-echo "Uncompress vocabulary ..."
+echo "Download vocabulary ..."
 
+mkdir -p Vocabulary
 cd Vocabulary
-tar -xf ORBvoc.txt.tar.gz
+if [ -f "ORBvoc.txt" ]; then
+  echo "Vocabulary file exists."
+else
+    wget https://s3.nbfc.io/orb/ORBvoc.txt
+fi
 cd ..
 
 echo "Configuring and building ORB_SLAM2 ..."
 
 mkdir build
 cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake .. -DVACCEL=OFF -DCMAKE_BUILD_TYPE=Release
+make -j
+cmake .. -DVACCEL=ON -DCMAKE_BUILD_TYPE=Release
+make -j
+cmake .. -DVACCEL=ON -DCMAKE_BUILD_TYPE=Release
 make -j

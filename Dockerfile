@@ -35,19 +35,32 @@ RUN cd /dpds && \
     make install && \
     ldconfig
 
+RUN apt-get update && apt-get install -y pip && \
+    pip install evo
+
+RUN apt-get install -y ninja-build python3-pip && \
+    pip install meson && \
+    cd /dpds/ &&\
+    git clone https://github.com/nubificus/vaccel --recursive &&\
+    cd vaccel &&\
+    git checkout v0.7.1 &&\ 
+    meson setup --buildtype=release -Dplugin-noop=enabled -Dplugin-exec=enabled build &&\
+    meson compile -C build &&\
+    meson install -C build
+
 RUN cd /dpds && \
-    git clone https://github.com/nubificus/orb-slam2_cuda.git 
+    git clone https://github.com/nubificus/orb-slam2_cuda.git && \
+    cd orb-slam2_cuda && \
+    git checkout feat_exec_track
 
 RUN cd /dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/ && \
     chmod +x build.sh &&\
     ./build.sh
 
-RUN cd /dpds/orb-slam2_cuda/NoClustering/ORB-SLAM2/ && \
-    chmod +x build.sh &&\
-    ./build.sh
+# RUN cd /dpds/orb-slam2_cuda/NoClustering/ORB-SLAM2/ && \
+#     chmod +x build.sh &&\
+#     ./build.sh
 
-RUN apt-get update && apt-get install -y pip && \
-    pip install evo
 
 # CMD ["./executable"]
 # CMD ["/bin/sh", "-ec", "while :; do echo '.'; sleep 5 ; done"]
