@@ -141,7 +141,12 @@ cv::Mat System::vaccel_track_stereo(const cv::Mat &imLeft, const cv::Mat &imRigh
         fprintf(stderr, "Could not initialize session: %d\n", ret);
     }
 
-    char *library = "./liborb.so";
+    #ifdef CPUONLY
+    char *library = "./liborb-cpu.so";
+    #else
+    char *library = "./liborb-gpu.so";
+    #endif
+
     char *operation = "my_wrapped_track_stereo";
 
     memset(args, 0, sizeof(args));

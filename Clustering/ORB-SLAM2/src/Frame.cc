@@ -499,7 +499,11 @@ void Frame::ComputeStereoMatches()
 
     // Set limits for search
     const float minZ = mb;
+    #ifdef CPUONLY
+    const float minD = 0;
+    #else
     const float minD = -3;
+    #endif
     const float maxD = mbf/minZ;
 
     // For each left keypoint search a match in the right image
@@ -553,8 +557,14 @@ void Frame::ComputeStereoMatches()
             }
         }
 
+        #ifdef CPUONLY
+            const int thOrbDist = (ORBmatcher::TH_HIGH+ORBmatcher::TH_LOW)/2;
+        #else
+            const int thOrbDist = ORBmatcher::TH_HIGH;
+        #endif
+
         // Subpixel match by correlation
-        if(bestDist<ORBmatcher::TH_HIGH)
+        if(bestDist<thOrbDist)
         {
             // coordinates in image pyramid at keypoint scale
             const float uR0 = mvKeysRight[bestIdxR].pt.x;
@@ -565,8 +575,12 @@ void Frame::ComputeStereoMatches()
 
             // sliding window search
             const int w = 5;
+            #ifdef CPUONLY
+            cv::Mat IL = mpORBextractorLeft->mvImagePyramid[kpL.octave].rowRange(scaledvL-w,scaledvL+w+1).colRange(scaleduL-w,scaleduL+w+1);
+            #else
             cv::Mat gMat = mpORBextractorLeft->mvImagePyramid[kpL.octave].rowRange(scaledvL - w, scaledvL + w + 1).colRange(scaleduL - w, scaleduL + w + 1);
             cv::Mat IL(gMat.rows, gMat.cols, gMat.type(), gMat.data, gMat.step);
+            #endif
             IL.convertTo(IL,CV_32F);
             IL = IL - IL.at<float>(w,w) *cv::Mat::ones(IL.rows,IL.cols,CV_32F);
 
@@ -583,8 +597,12 @@ void Frame::ComputeStereoMatches()
 
             for(int incR=-L; incR<=+L; incR++)
             {
+                #ifdef CPUONLY
+                cv::Mat IR = mpORBextractorRight->mvImagePyramid[kpL.octave].rowRange(scaledvL-w,scaledvL+w+1).colRange(scaleduR0+incR-w,scaleduR0+incR+w+1);
+                #else
                 cv::Mat gMat = mpORBextractorRight->mvImagePyramid[kpL.octave].rowRange(scaledvL - w, scaledvL + w + 1).colRange(scaleduR0 + incR - w, scaleduR0 + incR + w + 1);
                 cv::Mat IR(gMat.rows, gMat.cols, gMat.type(), gMat.data, gMat.step);
+                #endif
                 IR.convertTo(IR,CV_32F);
                 IR = IR - IR.at<float>(w,w) *cv::Mat::ones(IR.rows,IR.cols,CV_32F);
 

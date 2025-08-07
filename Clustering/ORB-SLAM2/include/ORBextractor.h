@@ -66,7 +66,11 @@ namespace ORB_SLAM2
 
         void DivideNode(ExtractorNode &n1, ExtractorNode &n2, ExtractorNode &n3, ExtractorNode &n4);
 
+        #ifdef CPUONLY
+        std::vector<cv::KeyPoint> vKeys;
+        #else
         std::vector<OrbKeyPoint> vKeys;
+        #endif
         cv::Point2i UL, UR, BL, BR;
         std::list<ExtractorNode>::iterator lit;
         bool bNoMore;
@@ -128,11 +132,18 @@ namespace ORB_SLAM2
     protected:
 
         void ComputePyramid(cv::Mat image);
-        void ComputeKeyPointsOctTree(std::vector<std::vector<OrbKeyPoint> >& allKeypoints);
         void CopyKeyAndDescriptor(std::vector<cv::KeyPoint>& _keypoints, cv::OutputArray _descriptors);
         void ComputeMonoIndex(int vLappingArea0, int vLappingArea1);
+        #ifdef CPUONLY
+        void ComputeKeyPointsOctTree(std::vector<std::vector<cv::KeyPoint> >& allKeypoints);    
+        std::vector<cv::KeyPoint> DistributeOctTree(const std::vector<cv::KeyPoint>& vToDistributeKeys, const int &minX,
+                                           const int &maxX, const int &minY, const int &maxY, const int &nFeatures, const int &level);
+
+        #else
+        void ComputeKeyPointsOctTree(std::vector<std::vector<OrbKeyPoint> >& allKeypoints);
         std::vector<OrbKeyPoint> DistributeOctTree(const std::vector<OrbKeyPoint>& vToDistributeKeys, const int &minX,
                                                    const int &maxX, const int &minY, const int &maxY, const int &N, const int &level);
+        #endif
 
         void ComputeKeyPointsOld(std::vector<std::vector<cv::KeyPoint> >& allKeypoints);
         std::vector<cv::Point> pattern;

@@ -28,13 +28,30 @@ else
 fi
 cd ..
 
-echo "Configuring and building ORB_SLAM2 ..."
+echo "---Configuring and building ORB_SLAM2---"
 
 mkdir build
 cd build
+echo "Build GPU executables ..."
+echo "cmake .. -DVACCEL=OFF -DCMAKE_BUILD_TYPE=Release"
 cmake .. -DVACCEL=OFF -DCMAKE_BUILD_TYPE=Release
 make -j
-cmake .. -DVACCEL=ON -DCMAKE_BUILD_TYPE=Release
+rm -r CMakeFiles CMakeCache.txt cmake_install.cmake Makefile
+
+echo "Build CPU executable ..."
+echo "cmake .. -DVACCEL=OFF -DCPUONLY=ON -DCMAKE_BUILD_TYPE=Release"
+cmake .. -DVACCEL=OFF -DCPUONLY=ON -DCMAKE_BUILD_TYPE=Release
 make -j
-cmake .. -DVACCEL=ON -DCMAKE_BUILD_TYPE=Release
+rm -r CMakeFiles CMakeCache.txt cmake_install.cmake Makefile
+
+echo "Build CPU executable with VACCEL ..."
+echo "cmake .. -DVACCEL=ON -DCPUONLY=ON -DCMAKE_BUILD_TYPE=Release"
+cmake .. -DVACCEL=ON -DCPUONLY=ON -DCMAKE_BUILD_TYPE=Release
 make -j
+rm -r CMakeFiles CMakeCache.txt cmake_install.cmake Makefile
+
+echo "Build GPU executable with VACCEL ..."
+echo "cmake .. -DVACCEL=ON -DCPUONLY=OFF -DCMAKE_BUILD_TYPE=Release"
+cmake .. -DVACCEL=ON -DCPUONLY=OFF -DCMAKE_BUILD_TYPE=Release
+make -j
+rm -r CMakeFiles CMakeCache.txt cmake_install.cmake Makefile

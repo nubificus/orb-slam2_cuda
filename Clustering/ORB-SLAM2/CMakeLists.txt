@@ -110,6 +110,8 @@ Eigen3::Eigen
 )
 
 option(VACCEL "Enable VACCEL support" OFF)
+option(CPUONLY "Enable CPU-only execution" OFF)
+
 if (VACCEL)
   message(STATUS "Building with VACCEL support")
 
@@ -124,72 +126,118 @@ if (VACCEL)
       src/wrap/utils.hpp
   )
 
-  add_library(liborb SHARED ${SOURCES})
+  if (CPUONLY)
+    message(STATUS "Building CPU-only executable")
+    add_library(liborb-cpu SHARED ${SOURCES})
 
-  target_link_libraries(liborb
-    ${OpenCV_LIBS}
-    ${Pangolin_LIBRARIES}
-    ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
-    ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
-    Eigen3::Eigen
-    vaccel
-    nvToolsExt
-    pthread
-  )
+    target_link_libraries(liborb-cpu
+      ${OpenCV_LIBS}
+      ${Pangolin_LIBRARIES}
+      ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
+      ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
+      Eigen3::Eigen
+      vaccel
+      pthread
+    )
 
-  set_target_properties(liborb PROPERTIES
-    OUTPUT_NAME "orb"
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
-  )
+    set_target_properties(liborb-cpu PROPERTIES
+      OUTPUT_NAME "orb-cpu"
+      LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+    )
 
-  add_compile_definitions(VACCEL)
-  target_compile_options(liborb PRIVATE -O3)
+    add_compile_definitions(VACCEL)
+    add_compile_definitions(CPUONLY)
 
-  add_executable(Test ${SOURCES})
+    target_compile_options(liborb-cpu PRIVATE -O3)
+    add_executable(cputest ${SOURCES})
 
-  target_link_libraries(Test PRIVATE
-  ${PROJECT_NAME}
-  vaccel -pthread
-  )
+    target_link_libraries(cputest PRIVATE
+      ${PROJECT_NAME}
+      vaccel -pthread
+    )
+  else()
+    message(STATUS "Building GPU-only executable")
+    add_library(liborb-gpu SHARED ${SOURCES})
+
+    target_link_libraries(liborb-gpu
+      ${OpenCV_LIBS}
+      ${Pangolin_LIBRARIES}
+      ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
+      ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
+      Eigen3::Eigen
+      vaccel
+      nvToolsExt
+      pthread
+    )
+
+    set_target_properties(liborb-gpu PROPERTIES
+      OUTPUT_NAME "orb-gpu"
+      LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+    )
+
+    add_compile_definitions(VACCEL)
+    # add_compile_definitions(CPUONLY)
+
+    target_compile_options(liborb-gpu PRIVATE -O3)
+    add_executable(gputest ${SOURCES})
+
+    target_link_libraries(gputest PRIVATE
+      ${PROJECT_NAME}
+      vaccel -pthread
+    )
+
+  endif()
+
+
 else()
 
   # Build examples
   if(NO_EXAMPLES)
     message(STATUS "Don't build examples")
   else ()
-    message(STATUS "Build examples")
+    if(CPUONLY)
+      message(STATUS "Build cpuonly: stereo_kitti_cpu")
 
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/RGB-D)
+      add_compile_definitions(CPUONLY)
 
-    add_executable(rgbd_tum
-            Examples/RGB-D/rgbd_tum.cc)
-    target_link_libraries(rgbd_tum ${PROJECT_NAME})
+      add_executable(stereo_kitti_cpu
+              Examples/Stereo/stereo_kitti.cc)
 
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo)
+      target_link_libraries(stereo_kitti_cpu ${PROJECT_NAME})
+    else()
+      message(STATUS "Build GPU examples")
 
-    add_executable(stereo_kitti
-            Examples/Stereo/stereo_kitti.cc)
-    target_link_libraries(stereo_kitti ${PROJECT_NAME})
+      set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/RGB-D)
 
-    add_executable(stereo_euroc
-            Examples/Stereo/stereo_euroc.cc)
-    target_link_libraries(stereo_euroc ${PROJECT_NAME})
+      add_executable(rgbd_tum
+              Examples/RGB-D/rgbd_tum.cc)
+      target_link_libraries(rgbd_tum ${PROJECT_NAME})
+
+      set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo)
+
+      add_executable(stereo_kitti
+              Examples/Stereo/stereo_kitti.cc)
+      target_link_libraries(stereo_kitti ${PROJECT_NAME})
+
+      add_executable(stereo_euroc
+              Examples/Stereo/stereo_euroc.cc)
+      target_link_libraries(stereo_euroc ${PROJECT_NAME})
 
 
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Monocular)
+      set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Monocular)
 
-    add_executable(mono_tum
-            Examples/Monocular/mono_tum.cc)
-    target_link_libraries(mono_tum ${PROJECT_NAME})
+      add_executable(mono_tum
+              Examples/Monocular/mono_tum.cc)
+      target_link_libraries(mono_tum ${PROJECT_NAME})
 
-    add_executable(mono_kitti
-            Examples/Monocular/mono_kitti.cc)
-    target_link_libraries(mono_kitti ${PROJECT_NAME})
+      add_executable(mono_kitti
+              Examples/Monocular/mono_kitti.cc)
+      target_link_libraries(mono_kitti ${PROJECT_NAME})
 
-    add_executable(mono_euroc
-            Examples/Monocular/mono_euroc.cc)
-    target_link_libraries(mono_euroc ${PROJECT_NAME})
-
+      add_executable(mono_euroc
+              Examples/Monocular/mono_euroc.cc)
+      target_link_libraries(mono_euroc ${PROJECT_NAME})
+    endif()
   endif() # Build Examples
 endif()
 
