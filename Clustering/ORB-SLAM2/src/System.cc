@@ -134,11 +134,31 @@ cv::Mat System::vaccel_track_stereo(const cv::Mat &imLeft, const cv::Mat &imRigh
     int ret = 0;
     struct vaccel_arg args[4];
     struct vaccel_session sess;
+    struct vaccel_resource lib_res;
     cv::Mat pose = cv::Mat::eye(4, 4, CV_32F);
+
+    const char *libs[] = {
+        "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/libORB_SLAM2.so",
+        "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/liborb-gpu.so",
+    };
+
+    ret = vaccel_resource_init_multi(&lib_res, libs,
+                        sizeof(libs) / sizeof(libs[0]), VACCEL_RESOURCE_LIB);
+    if (ret) {
+        fprintf(stderr, "Could not create resource: %s", strerror(ret));
+        exit(1);
+    }
 
     ret = vaccel_session_init(&sess, 0);
     if (ret != VACCEL_OK) {
         fprintf(stderr, "Could not initialize session: %d\n", ret);
+        exit(1);
+    }
+
+    ret = vaccel_resource_register(&lib_res, &sess);
+    if (ret) {
+        fprintf(stderr, "Could not register resource to session: %s\n", strerror(ret));
+        exit(1);
     }
 
     #ifdef CPUONLY
@@ -166,10 +186,11 @@ cv::Mat System::vaccel_track_stereo(const cv::Mat &imLeft, const cv::Mat &imRigh
     args[3].size = output_size;
     serialize_mat_new(pose, args[3].buf, output_size);
     
-    ret = vaccel_exec(&sess, library, operation , args, 3, &args[3], 1);
+    ret = vaccel_exec_with_resource(&sess, &lib_res, operation , args, 3, &args[3], 1);
     if (ret) {
         fprintf(stderr, "Could not execute TrackStereo wrapper: %d\n", ret);
-        // vaccel_session_release(&sess);
+        vaccel_session_release(&sess);
+        exit(1);
     }
 
     
