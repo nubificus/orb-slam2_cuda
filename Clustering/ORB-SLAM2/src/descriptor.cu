@@ -89,8 +89,8 @@ __global__ void compute_descriptor_kernel(uchar *images, uchar *inputImage, ORB_
 }
 
 void compute_descriptor(uchar *images, uchar *inputImage, ORB_SLAM2::GpuPoint *points, uint *sizes, int maxPointsLevel, cv::Point* pattern, int inputImageStep, int maxLevel, int cols, int rows, float *mvScaleFactor, cudaStream_t cudaStream){
-    dim3 dg( ceil( (float)maxPointsLevel/128 ), ceil((float)maxLevel/8) );
-    dim3 db( 128, 8 );
+    dim3 db( 64, 4 );
+    dim3 dg( ceil( (float)maxPointsLevel/db.x ), ceil((float)maxLevel/db.y) );
 
     compute_descriptor_kernel<<<dg, db, 0, cudaStream>>>(images, inputImage, points, sizes, pattern, inputImageStep, maxLevel, mvScaleFactor, cols, rows);
 }

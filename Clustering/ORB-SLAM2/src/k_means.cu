@@ -1,7 +1,7 @@
 #include "ORBextractor.h"
 #include "k_means.h"
 
-#define TDB 1024
+#define TDB 256
 #define N_ITER 1
 
 __device__ inline float distance(ORB_SLAM2::GpuPoint x1, int2 x2)
@@ -235,9 +235,10 @@ __global__ void last_cluster_assign(ORB_SLAM2::GpuPoint *d_datapoints_, ORB_SLAM
 
 
 void filter_points(ORB_SLAM2::GpuPoint *d_datapoints, ORB_SLAM2::GpuPoint *final_points_buffer, int2 *d_centroids, int *d_clust_sizes, uint *N, int *K, int2 *initial_centroids, int *mnFeatrues, int maxLevel, int points_offset, int cluster_offset, cudaStream_t stream) {
-	dim3 dg( ceil( (float)points_offset/TDB ), maxLevel );
-	dim3 dg2( ceil( (float)cluster_offset/TDB ), maxLevel );
-    dim3 db( TDB );
+	dim3 db( TDB );
+	dim3 dg( ceil( (float)points_offset/db.x ), maxLevel );
+	dim3 dg2( ceil( (float)cluster_offset/db.x ), maxLevel );
+    
 
 	cudaMemcpyAsync(d_centroids, initial_centroids, sizeof(int2)*maxLevel*cluster_offset, cudaMemcpyDeviceToDevice, stream);
 	cudaMemsetAsync(d_clust_sizes,0,cluster_offset*maxLevel*sizeof(int), stream);

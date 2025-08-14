@@ -58,8 +58,8 @@ __global__ void resize_kernel(uint old_h, uint old_w, float *_scaleFactor, const
 
 
 void resize(uint old_h, uint old_w, float *_scaleFactor, uchar *original_img, uchar *new_images, uint maxLevel, uint imageStep, cudaStream_t stream) {
-    dim3 dg( ceil( (float)old_w/128 ), ceil( (float)old_h/8 ), ceil( (float)maxLevel/1 ) );
-    dim3 db( 128, 8, 1 );
+    dim3 db( 32, 8, 1 );
+    dim3 dg( ceil( (float)old_w/db.x ), ceil( (float)old_h/db.y ), ceil( (float)maxLevel/1 ) );
 
     resize_kernel<<<dg, db, 0, stream>>>(old_h, old_w, _scaleFactor, original_img, new_images, maxLevel, imageStep);
 }

@@ -404,10 +404,10 @@ namespace ORB_SLAM2
         cudaMalloc(&d_mono_index, sizeof(uint));
         cudaMalloc(&d_stereo_index, sizeof(uint));
 
-        float k[KW*KH];
-        generateGaussian(k);
-        cudaMalloc(&(kernel), sizeof(float)*KW*KH);
-        cudaMemcpy(kernel, k, sizeof(float)*KW*KH, cudaMemcpyHostToDevice);
+        // float k[KW*KH];
+        generateGaussian(kernel);
+        // cudaMalloc(&(kernel), sizeof(float)*KW*KH);
+        // cudaMemcpy(kernel, k, sizeof(float)*KW*KH, cudaMemcpyHostToDevice);
 
         mvInvScaleFactor.resize(nlevels);
         mvInvLevelSigma2.resize(nlevels);
@@ -461,8 +461,10 @@ namespace ORB_SLAM2
             ++v0;
         }
 
-        cudaMalloc(&umax_gpu, sizeof(int)*umax.size());
-        cudaMemcpyAsync(umax_gpu, umax.data(), sizeof(int)*umax.size(), cudaMemcpyHostToDevice, cudaStream);
+        // cudaMemcpyToSymbol(u_max_const, umax.data(), sizeof(int)*umax.size());
+
+        // cudaMalloc(&umax_gpu, sizeof(int)*umax.size());
+        // cudaMemcpyAsync(umax_gpu, umax.data(), , cudaMemcpyHostToDevice, cudaStream);
     }
 
 #ifdef CPUONLY
@@ -604,7 +606,7 @@ namespace ORB_SLAM2
 
         fast_extract(d_images, d_inputImage, iniThFAST, minThFAST, d_R, d_R_low, d_points, n_, d_corner_buffer, d_corner_size, cols, rows, imageStep, d_scaleFactor, nlevels, cudaStream, interComplete, this->mvImagePyramid[0]);
         filter_points(this->d_corner_buffer, this->d_corner_buffer2, this->d_centroids, this->d_clust_sizes, this->d_corner_size, this->features, this->initial_centroids, this->mnFeaturesPerLevel.data(), this->nlevels, cols*rows, this->nfeatures, this->cudaStream);
-        compute_orientation(d_images, d_inputImage, d_corner_buffer, d_corner_size, this->mnFeaturesPerLevel[0], this->umax_gpu, imageStep, nlevels, cols, rows, d_scaleFactor, cudaStream);
+        compute_orientation(d_images, d_inputImage, d_corner_buffer, d_corner_size, this->mnFeaturesPerLevel[0], this->umax, imageStep, nlevels, cols, rows, d_scaleFactor, cudaStream);
         cudaStreamWaitEvent(cudaStream, blurComplete, 0);
         compute_descriptor(d_imagesBlured, d_inputImageBlured, d_corner_buffer, d_corner_size, this->mnFeaturesPerLevel[0], d_pattern, imageStep, nlevels, cols, rows, d_scaleFactor, cudaStream);
 

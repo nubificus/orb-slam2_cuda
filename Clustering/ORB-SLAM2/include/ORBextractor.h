@@ -201,7 +201,7 @@ namespace ORB_SLAM2
         int *d_points;
         cv::Point *d_pattern;
 
-        float *kernel;
+        float kernel[KW*KH];
 
         //piramidi
         uchar *d_imagesBlured;

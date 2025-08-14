@@ -17,6 +17,35 @@
 
 // __device__ __constant__ int HALF_PATCH_SIZE_GPU;
 
+__constant__ int u_max_const[HALF_PATCH_SIZE+1];
+
+__device__ inline float ic_angle_gpu_const(const uchar *image, int x, int y, int imageStep) {
+    int m_01 = 0, m_10 = 0;
+    const uchar* center = &(image[x + y * imageStep]);
+
+    #pragma unroll
+    for (int u = -HALF_PATCH_SIZE; u <= HALF_PATCH_SIZE; ++u)
+        m_10 += u * center[u];
+
+    const int step = imageStep;
+    #pragma unroll
+    for (int v = 1; v <= HALF_PATCH_SIZE; ++v) {
+        int v_sum = 0;
+        const int d = u_max_const[v];
+        for (int u = -d; u <= d; ++u) {
+            int val_plus = center[u + v*step];
+            int val_minus = center[u - v*step];
+            v_sum += (val_plus - val_minus);
+            m_10 += u * (val_plus + val_minus);
+        }
+        m_01 += v * v_sum;
+    }
+
+    float kp_dir = atan2f((float)m_01, (float)m_10);
+    if (kp_dir < 0) kp_dir += (2.0f * CV_PI);
+    return kp_dir * (180.0f / CV_PI);
+}
+
 __device__ inline float ic_angle_gpu(const uchar *image, int x, int y, int *u_max, int imageStep) {
     int m_01 = 0, m_10 = 0;
 
@@ -53,7 +82,7 @@ __device__ inline float ic_angle_gpu(const uchar *image, int x, int y, int *u_ma
     return kp_dir;
 }
 
-__global__ void compute_orientation_kernel(const uchar *images, const uchar *inputImage, ORB_SLAM2::GpuPoint *pointsTotal, const uint *sizes, int* umax, int inputImageStep, int maxLevel, const float *mvScaleFactor, int cols, int rows) {
+__global__ void compute_orientation_kernel(const uchar *images, const uchar *inputImage, ORB_SLAM2::GpuPoint *pointsTotal, const uint *sizes, int inputImageStep, int maxLevel, const float *mvScaleFactor, int cols, int rows) {
     const int index = blockIdx.x * blockDim.x + threadIdx.x;
     const int level = blockIdx.y * blockDim.y + threadIdx.y;
     if (level >= maxLevel)
@@ -79,16 +108,17 @@ __global__ void compute_orientation_kernel(const uchar *images, const uchar *inp
     
     const int x = points[index].x;
     const int y = points[index].y;
-    const float angle = ic_angle_gpu(myImagePyrimid, x, y, umax, imageStep);
+    const float angle = ic_angle_gpu_const(myImagePyrimid, x, y, imageStep);
     points[index].angle = angle;
     points[index].octave = level;
     points[index].size = scaledPatchSize;
 
 }
 
-void compute_orientation(uchar *images, uchar *inputImage, ORB_SLAM2::GpuPoint *points, uint *sizes, int maxPointsLevel, int* umax, int inputImageStep, int maxLevel, int cols, int rows, float *mvScaleFactor, cudaStream_t cudaStream){
-    dim3 dg( ceil( (float)maxPointsLevel/128 ), ceil((float)maxLevel/8) );
-    dim3 db( 128, 8 );
+void compute_orientation(uchar *images, uchar *inputImage, ORB_SLAM2::GpuPoint *points, uint *sizes, int maxPointsLevel, std::vector<int> umax, int inputImageStep, int maxLevel, int cols, int rows, float *mvScaleFactor, cudaStream_t cudaStream){
+    dim3 db( 64, 4 );
+    dim3 dg( ceil( (float)maxPointsLevel/db.x ), ceil((float)maxLevel/db.y) );
+    cudaMemcpyToSymbol(u_max_const, umax.data(), sizeof(int)*(HALF_PATCH_SIZE+1));
 
-    compute_orientation_kernel<<<dg, db, 0, cudaStream>>>(images, inputImage, points, sizes, umax, inputImageStep, maxLevel, mvScaleFactor, cols, rows);
+    compute_orientation_kernel<<<dg, db, 0, cudaStream>>>(images, inputImage, points, sizes, inputImageStep, maxLevel, mvScaleFactor, cols, rows);
 }
