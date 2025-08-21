@@ -31,6 +31,7 @@ bool Frame::mbInitialComputations=true;
 float Frame::cx, Frame::cy, Frame::fx, Frame::fy, Frame::invfx, Frame::invfy;
 float Frame::mnMinX, Frame::mnMinY, Frame::mnMaxX, Frame::mnMaxY;
 float Frame::mfGridElementWidthInv, Frame::mfGridElementHeightInv;
+std::vector<cv::Mat> pyr;
 
 Frame::Frame()
 {}
@@ -253,10 +254,21 @@ void Frame::AssignFeaturesToGrid()
 
 void Frame::ExtractORB(int flag, const cv::Mat &im)
 {
-    if(flag==0)
-        (*mpORBextractorLeft)(im,cv::Mat(),mvKeys,mDescriptors);
-    else
-        (*mpORBextractorRight)(im,cv::Mat(),mvKeysRight,mDescriptorsRight);
+    #ifndef VACCEL
+        if(flag==0)
+            (*mpORBextractorLeft)(im,cv::Mat(),mvKeys,mDescriptors);
+        else
+            (*mpORBextractorRight)(im,cv::Mat(),mvKeysRight,mDescriptorsRight);
+    #else
+        if(flag==0) {
+            mpORBextractorLeft->vaccel_orb_operator(im, cv::Mat(), mvKeys, mDescriptors);
+            // mpORBextractorLeft->mvImagePyramid = pyr;
+        }
+        else {
+            mpORBextractorRight->vaccel_orb_operator(im, cv::Mat(), mvKeysRight, mDescriptorsRight);
+            // mpORBextractorRight->mvImagePyramid = pyr;
+        }
+    #endif
 }
 
 void Frame::SetPose(cv::Mat Tcw)

@@ -94,6 +94,15 @@ namespace ORB_SLAM2
                          std::vector<cv::KeyPoint>& _keypoints,
                          cv::OutputArray _descriptors);
 
+        #ifdef VACCEL
+        int vaccel_orb_operator(const cv::Mat& image, const cv::Mat& mask,
+                    std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors);
+                    // std::vector<cv::Mat>& pyr);
+
+        void BuildImagePyramid(const cv::Mat& image) {
+            ComputePyramid(image);
+        }
+        #endif
         int inline GetLevels(){
             return nlevels;}
 

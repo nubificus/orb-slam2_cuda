@@ -27,18 +27,9 @@
 #include <iomanip>
 #include <iostream>
 
-#ifdef VACCEL
-#include <vaccel.h>
-#include "wrap/utils.hpp"
-
-#endif
 
 namespace ORB_SLAM2
 {
-
-#ifdef VACCEL
-    System* gSLAM = nullptr;  // ← This defines the global gSLAM
-#endif
 
 System::System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor,
                const bool bUseViewer)
@@ -127,61 +118,6 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpLoopCloser->SetTracker(mpTracker);
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
 }
-
-#ifdef VACCEL
-cv::Mat System::vaccel_track_stereo(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timestamp)
-{
-    int ret = 0;
-    struct vaccel_arg args[4];
-    struct vaccel_session sess;
-    cv::Mat pose = cv::Mat::eye(4, 4, CV_32F);
-
-    ret = vaccel_session_init(&sess, 0);
-    if (ret != VACCEL_OK) {
-        fprintf(stderr, "Could not initialize session: %d\n", ret);
-    }
-
-    #ifdef CPUONLY
-    char *library = "./liborb-cpu.so";
-    #else
-    char *library = "./liborb-gpu.so";
-    #endif
-
-    char *operation = "my_wrapped_track_stereo";
-
-    memset(args, 0, sizeof(args));
-
-    size_t imLeft_size = get_mat_size(imLeft);
-    args[0].size = imLeft_size;
-    serialize_mat_new(imLeft, args[0].buf, imLeft_size);
-
-    size_t imRight_size = get_mat_size(imRight);
-    args[1].size = imRight_size;
-    serialize_mat_new(imRight, args[1].buf, imRight_size);
-
-    args[2].size = sizeof(timestamp);
-    args[2].buf = (void*)&timestamp;
-
-    size_t output_size = get_mat_size(pose);
-    args[3].size = output_size;
-    serialize_mat_new(pose, args[3].buf, output_size);
-    
-    ret = vaccel_exec(&sess, library, operation , args, 3, &args[3], 1);
-    if (ret) {
-        fprintf(stderr, "Could not execute TrackStereo wrapper: %d\n", ret);
-        // vaccel_session_release(&sess);
-    }
-
-    
-    deserialize_mat(args[3].buf, args[3].size, pose);
-
-    std::cout << "[VACCEL HOST] Pose matrix from wrapper:\n" << pose << "\n";
-
-    vaccel_session_release(&sess);
-    return pose;
-}
-
-#endif
 
 cv::Mat System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timestamp)
 {

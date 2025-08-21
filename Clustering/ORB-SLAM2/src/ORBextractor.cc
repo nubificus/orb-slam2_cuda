@@ -31,6 +31,10 @@
 
 #include "ORBextractor.h"
 
+#ifdef VACCEL
+#include <vaccel.h>
+#include "wrap/utils.hpp"
+#endif
 
 using namespace cv;
 using namespace std;
@@ -1433,6 +1437,59 @@ namespace ORB_SLAM2
         }
 
     }
+
+    #ifdef VACCEL
+    int ORBextractor::vaccel_orb_operator(const cv::Mat& image, const cv::Mat& mask, std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors)
+        // std::vector<cv::Mat>& pyr)
+    // int vaccel_orb_operator(Mat image, Mat mask, const std::vector<KeyPoint>& keypoints, Mat& descriptors)
+    {
+        int ret = 0;
+        struct vaccel_arg args[5];
+        struct vaccel_session sess;
+
+        ret = vaccel_session_init(&sess, 0);
+        if (ret != VACCEL_OK) {
+            fprintf(stderr, "Could not initialize session: %d\n");
+            return 1;
+        }
+
+        #ifndef CPUONLY
+        char *library = "./liborb-gpu.so";
+        #else
+        char *library = "./liborb-cpu.so";
+        #endif
+        char *operation = "my_wrapped_orb_operator";
+
+        memset(args, 0, sizeof(args));
+
+        size_t image_size = get_mat_size(image);
+        args[0].size = image_size;
+        args[0].buf = serialize_mat_new(image, args[0].buf, image_size);
+
+        size_t mask_size = get_mat_size(mask);
+        args[1].size = mask_size;
+        args[1].buf = serialize_mat_new(mask, args[1].buf, mask_size);
+
+        ret = vaccel_exec(&sess, library, operation , &args[0], 2, &args[2], 3);
+        if (ret) {
+            fprintf(stderr, "Could not execute function: %d\n", ret);
+            vaccel_session_release(&sess);
+            return ret;
+        }
+
+        deserialize_vec_of_keypoints(args[2].buf,args[2].size,keypoints);
+        deserialize_mat(args[3].buf, args[3].size, descriptors);
+        deserialize_vec_of_mat(args[4].buf, args[4].size, mvImagePyramid);
+
+        // std::cout << "[VACCEL HOST] Received pyr with " << pyr.size() << " levels\n";
+        // for (size_t i = 0; i < pyr.size(); ++i)
+        // std::cout << " → Level " << i << ": " << pyr[i].rows << "x" << pyr[i].cols << "\n";
+
+        vaccel_session_release(&sess);
+
+        return ret;
+    }
+    #endif
 
     void ORBextractor::CopyKeyAndDescriptor(vector<KeyPoint>& _keypoints, OutputArray _descriptors) {
         uint nkeypoints = 0;

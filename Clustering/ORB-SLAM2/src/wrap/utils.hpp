@@ -3,6 +3,7 @@
 #include <vector>
 #include <Eigen/Dense>
 #include <opencv2/core/eigen.hpp>
+#include <cuda_runtime.h>  // Needed for cudaMemcpy
 
 using namespace std;
 using namespace cv;
@@ -84,4 +85,49 @@ deserialize_vec_of_keypoints(void * buffer, size_t buffer_size, std::vector<KeyP
 
     vec.resize(header[0]);
     memcpy(vec.data(), (char*)buffer + sizeof(size_t), header[0] * sizeof(cv::KeyPoint));
+}
+
+
+size_t get_vec_of_mat_size(const std::vector<cv::Mat>& vec) {
+    size_t totalSize = sizeof(int) * (vec.size() + 1); // one int for count, one per mat offset
+    for (const auto& mat : vec) {
+        totalSize += get_mat_size(mat);
+    }
+    return totalSize;
+}
+
+void serialize_vec_of_mat(const std::vector<cv::Mat>& vec, void* buffer) {
+    int* header = reinterpret_cast<int*>(buffer);
+    header[0] = static_cast<int>(vec.size());
+
+    // Offsets start right after the count (first int)
+    size_t offset = sizeof(int) * (vec.size() + 1);
+    char* bufferPtr = reinterpret_cast<char*>(buffer);
+
+    for (size_t i = 0; i < vec.size(); ++i) {
+        header[i + 1] = static_cast<int>(offset);
+        serialize_mat(vec[i], bufferPtr + offset);
+        offset += get_mat_size(vec[i]);
+    }
+}
+
+void* serialize_vec_of_mat_new(const std::vector<cv::Mat>& vec, void*& buf, size_t& size) {
+    size = get_vec_of_mat_size(vec);
+    if (!buf) {
+        buf = malloc(size);
+    }
+    serialize_vec_of_mat(vec, buf);
+    return buf;
+}
+
+void deserialize_vec_of_mat(void* buffer, size_t buffer_size, std::vector<cv::Mat>& vec) {
+    int* header = reinterpret_cast<int*>(buffer);
+    int numMats = header[0];
+
+    vec.resize(numMats);
+
+    for (int i = 0; i < numMats; ++i) {
+        char* matPtr = reinterpret_cast<char*>(buffer) + header[i + 1];
+        deserialize_mat(matPtr, buffer_size - header[i + 1], vec[i]);
+    }
 }

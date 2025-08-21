@@ -17,9 +17,7 @@
 
 
 
-extern "C" {
+extern "C" __attribute__((visibility("default")))
 
-int my_wrapped_track_stereo(struct vaccel_arg *read, size_t nr_read,
-			struct vaccel_arg *write, size_t nr_write);
-
-}
+int my_wrapped_orb_operator(struct vaccel_arg *read, size_t nr_read,
+		  struct vaccel_arg *write, size_t nr_write);
