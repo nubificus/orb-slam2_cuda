@@ -29,6 +29,12 @@
 #define KH 7
 #define SIGMA 2
 
+#ifdef VACCEL
+#include <vaccel.h>
+
+extern struct vaccel_session sess;
+extern struct vaccel_resource lib_res;
+#endif
 
 namespace ORB_SLAM2
 {
@@ -84,6 +90,11 @@ namespace ORB_SLAM2
 
         ORBextractor(int nfeatures, float scaleFactor, int nlevels,
                      int iniThFAST, int minThFAST);
+        
+        #ifdef VACCEL
+        ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
+                    int _iniThFAST, int _minThFAST, int vaccel_host);
+        #endif
 
         ~ORBextractor();
 
@@ -96,8 +107,7 @@ namespace ORB_SLAM2
 
         #ifdef VACCEL
         int vaccel_orb_operator(const cv::Mat& image, const cv::Mat& mask,
-                    std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors);
-                    // std::vector<cv::Mat>& pyr);
+                    std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors, int session_id);
 
         void BuildImagePyramid(const cv::Mat& image) {
             ComputePyramid(image);
@@ -136,6 +146,10 @@ namespace ORB_SLAM2
         int nlevels;
         std::vector<int> mnFeaturesPerLevel;
         float *d_scaleFactor;
+        // #ifdef VACCEL
+        // struct vaccel_session sess[2];
+        // struct vaccel_resource lib_res[2];
+        // #endif
 
 
     protected:

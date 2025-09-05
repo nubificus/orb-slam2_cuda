@@ -261,11 +261,13 @@ void Frame::ExtractORB(int flag, const cv::Mat &im)
             (*mpORBextractorRight)(im,cv::Mat(),mvKeysRight,mDescriptorsRight);
     #else
         if(flag==0) {
-            mpORBextractorLeft->vaccel_orb_operator(im, cv::Mat(), mvKeys, mDescriptors);
+            // std::cout << "\n[FRAME] Call vaccel_orb_operator with ID = [" << flag << "]" << std::endl;
+            mpORBextractorLeft->vaccel_orb_operator(im, cv::Mat(), mvKeys, mDescriptors, 0);
             // mpORBextractorLeft->mvImagePyramid = pyr;
         }
         else {
-            mpORBextractorRight->vaccel_orb_operator(im, cv::Mat(), mvKeysRight, mDescriptorsRight);
+            // std::cout << "\n[FRAME] Call vaccel_orb_operator with ID = [" << flag << "]" << std::endl;
+            mpORBextractorRight->vaccel_orb_operator(im, cv::Mat(), mvKeysRight, mDescriptorsRight, 1);
             // mpORBextractorRight->mvImagePyramid = pyr;
         }
     #endif

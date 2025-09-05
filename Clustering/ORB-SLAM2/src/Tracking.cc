@@ -40,6 +40,11 @@
 
 using namespace std;
 
+#ifdef VACCEL
+struct vaccel_session sess;
+struct vaccel_resource lib_res;
+#endif
+
 namespace ORB_SLAM2
 {
 
@@ -116,11 +121,55 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     int fIniThFAST = fSettings["ORBextractor.iniThFAST"];
     int fMinThFAST = fSettings["ORBextractor.minThFAST"];
 
+    #ifdef VACCEL
+
+    int ret = 0;
+    #ifdef CPUONLY
+    const char *libs[] = {
+        "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/libORB_SLAM2.so",
+        "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/liborb-cpu.so",
+    };
+    #else
+    const char *libs[] = {
+        "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/libORB_SLAM2.so",
+        "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/liborb-gpu.so",
+    };
+    #endif
+
+    ret = vaccel_resource_init_multi(&lib_res, libs,
+                        sizeof(libs) / sizeof(libs[0]), VACCEL_RESOURCE_LIB);
+    if (ret) {
+        fprintf(stderr, "Could not create resource: %s", strerror(ret));
+        exit(1);
+    }
+
+    ret = vaccel_session_init(&sess, 0);
+    if (ret != VACCEL_OK) {
+        fprintf(stderr, "Could not initialize session: %d\n");
+        exit(1);
+    }
+
+    std::cout << "Session initialized successfully!\n" << std::endl;
+    ret = vaccel_resource_register(&lib_res, &sess);
+    if (ret) {
+        fprintf(stderr, "Could not register resource to session: %s\n", strerror(ret));
+        exit(1);
+    }
+    #endif
+
+    #ifdef VACCEL
+    mpORBextractorLeft = new ORBextractor(nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST,1);
+    #else
     mpORBextractorLeft = new ORBextractor(nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST);
+    #endif
 
-    if(sensor==System::STEREO)
+    if(sensor==System::STEREO) {
+        #ifdef VACCEL
+        mpORBextractorRight = new ORBextractor(nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST,2);
+        #else
         mpORBextractorRight = new ORBextractor(nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST);
-
+        #endif
+    }
     if(sensor==System::MONOCULAR)
         mpIniORBextractor = new ORBextractor(2*nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST);
 

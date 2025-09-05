@@ -32,7 +32,6 @@
 #include "ORBextractor.h"
 
 #ifdef VACCEL
-#include <vaccel.h>
 #include "wrap/utils.hpp"
 #endif
 
@@ -358,6 +357,170 @@ namespace ORB_SLAM2
                     -1,-6, 0,-11/*mean (0.127148), correlation (0.547401)*/
             };
 
+    /*
+    * When vaccel_host = 1 or 2, the constructor is called from the host side:
+    *   - Does not allocate GPU memory
+    * Value 1 is for left image and 2 for right image.
+    *
+    * When vaccel_host = 0, the constructor is called from the agent side:
+    *   - Allocates buffers for GPU (I/O between CUDA kernels)
+    */
+    ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
+                               int _iniThFAST, int _minThFAST, int vaccel_host):
+            nfeatures(_nfeatures), scaleFactor(_scaleFactor), nlevels(_nlevels),
+            iniThFAST(_iniThFAST), minThFAST(_minThFAST)
+    {
+        mvScaleFactor.resize(nlevels);
+        mvLevelSigma2.resize(nlevels);
+        mvScaleFactor[0]=1.0f;
+        mvLevelSigma2[0]=1.0f;
+        maxScaleFactor = 0;
+        for(int i=1; i<nlevels; i++)
+        {
+            float _scaleFactor = mvScaleFactor[i-1]*scaleFactor;
+            if (maxScaleFactor < _scaleFactor) {
+                maxScaleFactor = _scaleFactor;
+            }
+            mvScaleFactor[i]= _scaleFactor;
+            mvLevelSigma2[i]=mvScaleFactor[i]*mvScaleFactor[i];
+        }
+        if (scaleFactor >= 1){
+            maxScaleFactor = 1;
+        } else {
+            maxScaleFactor = 1/maxScaleFactor;
+        }
+
+        int points[32] = {0,  3,  1,  3, 2,  2, 3,  1, 3, 0, 3, -1, 2, -2, 1, -3,
+                          0, -3, -1, -3, -2, -2, -3, -1, -3, 0, -3,  1, -2,  2, -1,  3};
+
+        if (vaccel_host == 0) {
+            int cuda_device = 0;
+            cudaDeviceProp deviceProps;
+            cudaGetDeviceProperties(&deviceProps, cuda_device);
+
+            cudaStreamCreateWithPriority(&cudaStream, cudaStreamNonBlocking, 0);
+            cudaStreamCreateWithPriority(&cudaStreamCpy, cudaStreamNonBlocking, 2);
+            cudaStreamCreateWithPriority(&cudaStreamBlur, cudaStreamNonBlocking, 1);
+            cudaEventCreateWithFlags(&resizeComplete, cudaEventDisableTiming);
+            cudaEventCreateWithFlags(&blurComplete, cudaEventDisableTiming);
+            cudaEventCreateWithFlags(&interComplete, cudaEventDisableTiming);
+            cudaEventCreateWithFlags(&filterKernelComplete, cudaEventDisableTiming);
+
+            // set_half_patch_size(HALF_PATCH_SIZE, cudaStream);
+
+            cudaMalloc(&d_scaleFactor, sizeof(float)*mvScaleFactor.size());
+            cudaMemcpy(d_scaleFactor, mvScaleFactor.data(), sizeof(float)*mvScaleFactor.size(), cudaMemcpyHostToDevice);
+            cudaMalloc(&d_points, 32*sizeof(int));
+            cudaMemcpyAsync(d_points, points, 32*sizeof(int), cudaMemcpyHostToDevice, cudaStream);
+            cudaMalloc(&d_corner_size, sizeof(uint)*nlevels);
+            cudaMalloc(&d_mono_index, sizeof(uint));
+            cudaMalloc(&d_stereo_index, sizeof(uint));
+
+            float k[KW*KH];
+            generateGaussian(k);
+            cudaMalloc(&(kernel), sizeof(float)*KW*KH);
+            cudaMemcpy(kernel, k, sizeof(float)*KW*KH, cudaMemcpyHostToDevice);
+        }
+
+        mvInvScaleFactor.resize(nlevels);
+        mvInvLevelSigma2.resize(nlevels);
+        for(int i=0; i<nlevels; i++)
+        {
+            mvInvScaleFactor[i]=1.0f/mvScaleFactor[i];
+            mvInvLevelSigma2[i]=1.0f/mvLevelSigma2[i];
+        }
+
+        mvImagePyramid.resize(nlevels);
+
+        mnFeaturesPerLevel.resize(nlevels);
+        float factor = 1.0f / scaleFactor;
+        float nDesiredFeaturesPerScale = nfeatures*(1 - factor)/(1 - (float)pow((double)factor, (double)nlevels));
+
+        int sumFeatures = 0;
+        for( int level = 0; level < nlevels-1; level++ )
+        {
+            mnFeaturesPerLevel[level] = cvRound(nDesiredFeaturesPerScale);
+            sumFeatures += mnFeaturesPerLevel[level];
+            nDesiredFeaturesPerScale *= factor;
+        }
+        mnFeaturesPerLevel[nlevels-1] = std::max(nfeatures - sumFeatures, 0);
+
+        allocMemory(INIT_IMAGE_W, INIT_IMAGE_H, INIT_IMAGE_W);
+        allocInputMemory(INIT_IMAGE_W, INIT_IMAGE_H, INIT_IMAGE_W);
+
+        if (vaccel_host == 0) {
+            cudaMemcpy(this->features, mnFeaturesPerLevel.data(), sizeof(uint)*mnFeaturesPerLevel.size(), cudaMemcpyHostToDevice);
+        }
+        const int npoints = 512;
+        const Point* pattern0 = (const Point*)bit_pattern_31_;
+        std::copy(pattern0, pattern0 + npoints, std::back_inserter(pattern));
+
+        if (vaccel_host == 0) {
+            cudaMalloc(&(d_pattern), sizeof(cv::Point)*pattern.size());
+            cudaMemcpy(d_pattern, pattern.data(), sizeof(cv::Point)*pattern.size(), cudaMemcpyHostToDevice);
+        }
+
+        //This is for orientation
+        // pre-compute the end of a row in a circular patch
+        umax.resize(HALF_PATCH_SIZE + 1);
+
+        int v, v0, vmax = cvFloor(HALF_PATCH_SIZE * sqrt(2.f) / 2 + 1);
+        int vmin = cvCeil(HALF_PATCH_SIZE * sqrt(2.f) / 2);
+        const double hp2 = HALF_PATCH_SIZE*HALF_PATCH_SIZE;
+        for (v = 0; v <= vmax; ++v)
+            umax[v] = cvRound(sqrt(hp2 - v * v));
+
+        // Make sure we are symmetric
+        for (v = HALF_PATCH_SIZE, v0 = 0; v >= vmin; --v)
+        {
+            while (umax[v0] == umax[v0 + 1])
+                ++v0;
+            umax[v] = v0;
+            ++v0;
+        }
+
+        if (vaccel_host == 0) {
+            cudaMalloc(&umax_gpu, sizeof(int)*umax.size());
+            cudaMemcpyAsync(umax_gpu, umax.data(), sizeof(int)*umax.size(), cudaMemcpyHostToDevice, cudaStream);
+        }
+
+        /*
+        if (vaccel_host >= 1) {
+            #ifdef VACCEL
+            int ret = 0;
+            #ifdef CPUONLY
+            const char *libs[] = {
+                "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/libORB_SLAM2.so",
+                "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/liborb-cpu.so",
+            };
+            #else
+            const char *libs[] = {
+                "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/libORB_SLAM2.so",
+                "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/liborb-gpu.so",
+            };
+            #endif
+
+            ret = vaccel_resource_init_multi(&(lib_res[vaccel_host-1]), libs,
+                                sizeof(libs) / sizeof(libs[0]), VACCEL_RESOURCE_LIB);
+            if (ret) {
+                fprintf(stderr, "Could not create resource: %s", strerror(ret));
+                exit(1);
+            }
+
+            ret = vaccel_session_init(&(sess[vaccel_host-1]), 0);
+            if (ret != VACCEL_OK) {
+                fprintf(stderr, "Could not initialize session: %d\n");
+                exit(1);
+            }
+
+            ret = vaccel_resource_register(&(lib_res[vaccel_host-1]), &(sess[vaccel_host-1]));
+            if (ret) {
+                fprintf(stderr, "Could not register resource to session: %s\n", strerror(ret));
+                exit(1);
+            }
+            #endif
+        }*/
+    }
     ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
                                int _iniThFAST, int _minThFAST):
             nfeatures(_nfeatures), scaleFactor(_scaleFactor), nlevels(_nlevels),
@@ -1439,19 +1602,13 @@ namespace ORB_SLAM2
     }
 
     #ifdef VACCEL
-    int ORBextractor::vaccel_orb_operator(const cv::Mat& image, const cv::Mat& mask, std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors)
+    int ORBextractor::vaccel_orb_operator(const cv::Mat& image, const cv::Mat& mask,
+        std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors, int session_id)
         // std::vector<cv::Mat>& pyr)
     // int vaccel_orb_operator(Mat image, Mat mask, const std::vector<KeyPoint>& keypoints, Mat& descriptors)
     {
         int ret = 0;
-        struct vaccel_arg args[5];
-        struct vaccel_session sess;
-
-        ret = vaccel_session_init(&sess, 0);
-        if (ret != VACCEL_OK) {
-            fprintf(stderr, "Could not initialize session: %d\n");
-            return 1;
-        }
+        struct vaccel_arg args[6];
 
         #ifndef CPUONLY
         char *library = "./liborb-gpu.so";
@@ -1470,22 +1627,29 @@ namespace ORB_SLAM2
         args[1].size = mask_size;
         args[1].buf = serialize_mat_new(mask, args[1].buf, mask_size);
 
-        ret = vaccel_exec(&sess, library, operation , &args[0], 2, &args[2], 3);
+        args[2].size = sizeof(int);
+        args[2].buf = (uint8_t*)&session_id;
+
+        /*ret = vaccel_exec_with_resource(&(sess[session_id]), &(lib_res[session_id]), operation , &args[0], 2, &args[2], 3);
+        if (ret) {
+            fprintf(stderr, "Could not execute function: %d\n", ret);
+            vaccel_session_release(&(sess[session_id]));
+            return ret;
+        }*/
+        ret = vaccel_exec_with_resource(&sess, &lib_res, operation , &args[0], 3, &args[3], 3);
         if (ret) {
             fprintf(stderr, "Could not execute function: %d\n", ret);
             vaccel_session_release(&sess);
             return ret;
         }
 
-        deserialize_vec_of_keypoints(args[2].buf,args[2].size,keypoints);
-        deserialize_mat(args[3].buf, args[3].size, descriptors);
-        deserialize_vec_of_mat(args[4].buf, args[4].size, mvImagePyramid);
+        deserialize_vec_of_keypoints(args[3].buf,args[3].size,keypoints);
+        deserialize_mat(args[4].buf, args[4].size, descriptors);
+        deserialize_vec_of_mat(args[5].buf, args[5].size, mvImagePyramid);
 
         // std::cout << "[VACCEL HOST] Received pyr with " << pyr.size() << " levels\n";
         // for (size_t i = 0; i < pyr.size(); ++i)
         // std::cout << " → Level " << i << ": " << pyr[i].rows << "x" << pyr[i].cols << "\n";
-
-        vaccel_session_release(&sess);
 
         return ret;
     }
@@ -1602,6 +1766,11 @@ namespace ORB_SLAM2
         cudaEventDestroy(blurComplete);
         cudaEventDestroy(interComplete);
         cudaEventDestroy(filterKernelComplete);
+        #ifdef VACCEL
+        // vaccel_session_release(&sess[0]);
+        // vaccel_session_release(&sess[1]);
+        vaccel_session_release(&sess);
+        #endif
     }
     #endif
 
