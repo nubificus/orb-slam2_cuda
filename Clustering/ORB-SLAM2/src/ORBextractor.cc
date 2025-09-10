@@ -365,6 +365,7 @@ namespace ORB_SLAM2
     * When vaccel_host = 0, the constructor is called from the agent side:
     *   - Allocates buffers for GPU (I/O between CUDA kernels)
     */
+    #ifdef VACCEL
     ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
                                int _iniThFAST, int _minThFAST, int vaccel_host):
             nfeatures(_nfeatures), scaleFactor(_scaleFactor), nlevels(_nlevels),
@@ -521,6 +522,8 @@ namespace ORB_SLAM2
             #endif
         }*/
     }
+    #endif
+    
     ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
                                int _iniThFAST, int _minThFAST):
             nfeatures(_nfeatures), scaleFactor(_scaleFactor), nlevels(_nlevels),
@@ -1608,44 +1611,67 @@ namespace ORB_SLAM2
     // int vaccel_orb_operator(Mat image, Mat mask, const std::vector<KeyPoint>& keypoints, Mat& descriptors)
     {
         int ret = 0;
-        struct vaccel_arg args[6];
+        int args_cnt = -1;
+        struct vaccel_arg rargs[3];
+        struct vaccel_arg wargs[3];
 
-        #ifndef CPUONLY
-        char *library = "./liborb-gpu.so";
-        #else
-        char *library = "./liborb-cpu.so";
-        #endif
+        // #ifndef CPUONLY
+        // char *library = "./liborb-gpu.so";
+        // #else
+        // char *library = "./liborb-cpu.so";
+        // #endif
         char *operation = "my_wrapped_orb_operator";
 
-        memset(args, 0, sizeof(args));
+        memset(rargs, 0, sizeof(rargs));
+        memset(wargs, 0, sizeof(wargs));
 
         size_t image_size = get_mat_size(image);
-        args[0].size = image_size;
-        args[0].buf = serialize_mat_new(image, args[0].buf, image_size);
+        rargs[0].size = image_size;
+        rargs[0].buf = serialize_mat_new(image, rargs[0].buf, image_size);
 
         size_t mask_size = get_mat_size(mask);
-        args[1].size = mask_size;
-        args[1].buf = serialize_mat_new(mask, args[1].buf, mask_size);
+        rargs[1].size = mask_size;
+        rargs[1].buf = serialize_mat_new(mask, rargs[1].buf, mask_size);
 
-        args[2].size = sizeof(int);
-        args[2].buf = (uint8_t*)&session_id;
+        rargs[2].size = sizeof(int);
+        rargs[2].buf = (uint8_t*)&session_id;
 
-        /*ret = vaccel_exec_with_resource(&(sess[session_id]), &(lib_res[session_id]), operation , &args[0], 2, &args[2], 3);
+        wargs[0].buf = malloc(56736); //malloc(2026*sizeof(KeyPoint) + sizeof(size_t));
+        wargs[0].size = 56736; //sizeof(size_t) + 2026*sizeof(KeyPoint);
+        
+        wargs[1].buf = malloc(64928); //malloc(2026*32*sizeof(CV_8U));
+        wargs[1].size = 64928; //2026*32*sizeof(CV_8U);
+        
+        // // args[5].buf = malloc(sizeof(size_t)+(370*1226)+(308*1022)+(257*851)+(214*709)+(178*591)+(149*493)+(124*411)+(103*342));
+        wargs[2].buf = malloc(1404442); //malloc(sizeof(size_t)+(370*1226)*8);
+        wargs[2].size = 1404442; //sizeof(size_t)+(370*1226)*8;
+
+        ret = vaccel_exec_with_resource(&(sess[session_id]), &(lib_res[session_id]), operation , &rargs[0], 3, &wargs[0], 3);
         if (ret) {
             fprintf(stderr, "Could not execute function: %d\n", ret);
             vaccel_session_release(&(sess[session_id]));
             return ret;
-        }*/
-        ret = vaccel_exec_with_resource(&sess, &lib_res, operation , &args[0], 3, &args[3], 3);
+        }
+        /*ret = vaccel_exec_with_resource(&sess, &lib_res, operation , &args[0], 3, &args[3], 3);
         if (ret) {
             fprintf(stderr, "Could not execute function: %d\n", ret);
             vaccel_session_release(&sess);
             return ret;
-        }
+        }*/
 
-        deserialize_vec_of_keypoints(args[3].buf,args[3].size,keypoints);
-        deserialize_mat(args[4].buf, args[4].size, descriptors);
-        deserialize_vec_of_mat(args[5].buf, args[5].size, mvImagePyramid);
+        // std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+        deserialize_vec_of_keypoints(wargs[0].buf, wargs[0].size, keypoints);
+        deserialize_mat(wargs[1].buf, wargs[1].size, descriptors);
+        deserialize_vec_of_mat(wargs[2].buf, wargs[2].size, mvImagePyramid);
+                
+        // std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+
+        // double tdeser= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
+        // std::cout << "deserialization: " << tdeser << std::endl;
+        
+        free(wargs[0].buf);
+        free(wargs[1].buf);
+        free(wargs[2].buf);
 
         // std::cout << "[VACCEL HOST] Received pyr with " << pyr.size() << " levels\n";
         // for (size_t i = 0; i < pyr.size(); ++i)
@@ -1685,7 +1711,7 @@ namespace ORB_SLAM2
             cv::Mat desc(1, 32, CV_8U, (*point).descriptor);
 //            cout << desc << endl;
 
-            cv:KeyPoint keypoint(point->x, point->y, point->size, point->angle, point->score, point->octave);
+            cv::KeyPoint keypoint(point->x, point->y, point->size, point->angle, point->score, point->octave);
             _keypoints.push_back(keypoint);
             desc.row(0).copyTo(descriptors.row(i));
             i++;
@@ -1767,9 +1793,9 @@ namespace ORB_SLAM2
         cudaEventDestroy(interComplete);
         cudaEventDestroy(filterKernelComplete);
         #ifdef VACCEL
-        // vaccel_session_release(&sess[0]);
-        // vaccel_session_release(&sess[1]);
-        vaccel_session_release(&sess);
+        vaccel_session_release(&sess[0]);
+        vaccel_session_release(&sess[1]);
+        // vaccel_session_release(&sess);
         #endif
     }
     #endif

@@ -10,9 +10,9 @@ using namespace cv;
 
 size_t
 get_mat_size(const Mat & mat) {
-    size_t data_size = mat.isContinuous() ? mat.total() * mat.elemSize() :
+    // size_t data_size = mat.isContinuous() ? mat.total() * mat.elemSize() : \
 	    mat.step[0] * mat.rows;
-
+    size_t data_size = mat.empty() ? 0 : mat.total() * mat.elemSize();
     return sizeof(int) * 4 + data_size;
 }
 
@@ -23,7 +23,7 @@ serialize_mat(const Mat & mat, void * buffer) {
     header[0] = mat.rows;
     header[1] = mat.cols;
     header[2] = mat.type();
-    header[3] = mat.isContinuous() ? mat.total() * mat.elemSize() : 
+    header[3] = mat.total() * mat.elemSize(); //mat.isContinuous() ? mat.total() * mat.elemSize() : \
 	    mat.step[0] * mat.rows; 
     char * data = (char * )((int * ) buffer + 4);
 

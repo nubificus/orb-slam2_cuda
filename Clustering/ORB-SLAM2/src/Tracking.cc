@@ -41,8 +41,8 @@
 using namespace std;
 
 #ifdef VACCEL
-struct vaccel_session sess;
-struct vaccel_resource lib_res;
+struct vaccel_session sess[2];
+struct vaccel_resource lib_res[2];
 #endif
 
 namespace ORB_SLAM2
@@ -131,29 +131,33 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     };
     #else
     const char *libs[] = {
-        "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/libORB_SLAM2.so",
+        "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/libORB_SLAM2-bf.so",
         "/dpds/orb-slam2_cuda/Clustering/ORB-SLAM2/build/liborb-gpu.so",
     };
     #endif
 
-    ret = vaccel_resource_init_multi(&lib_res, libs,
+    
+
+    for (int i =0; i < 2; i++) {
+        ret = vaccel_resource_init_multi(&lib_res[i], libs,
                         sizeof(libs) / sizeof(libs[0]), VACCEL_RESOURCE_LIB);
-    if (ret) {
-        fprintf(stderr, "Could not create resource: %s", strerror(ret));
-        exit(1);
-    }
+        if (ret) {
+            fprintf(stderr, "Could not create resource: %s", strerror(ret));
+            exit(1);
+        }
+        
+        ret = vaccel_session_init(&sess[i], 0);
+        if (ret != VACCEL_OK) {
+            fprintf(stderr, "Could not initialize session: %d\n");
+            exit(1);
+        }
 
-    ret = vaccel_session_init(&sess, 0);
-    if (ret != VACCEL_OK) {
-        fprintf(stderr, "Could not initialize session: %d\n");
-        exit(1);
-    }
-
-    std::cout << "Session initialized successfully!\n" << std::endl;
-    ret = vaccel_resource_register(&lib_res, &sess);
-    if (ret) {
-        fprintf(stderr, "Could not register resource to session: %s\n", strerror(ret));
-        exit(1);
+        std::cout << "Session initialized successfully!\n" << std::endl;
+        ret = vaccel_resource_register(&lib_res[i], &sess[i]);
+        if (ret) {
+            fprintf(stderr, "Could not register resource to session: %s\n", strerror(ret));
+            exit(1);
+        }
     }
     #endif
 
@@ -1615,7 +1619,12 @@ void Tracking::InformOnlyTracking(const bool &flag)
     mbOnlyTracking = flag;
 }
 
-
+void Tracking::Shutdown() {
+    #ifdef VACCEL
+    vaccel_session_release(&sess[0]);
+    vaccel_session_release(&sess[1]);
+    #endif
+}
 
 } //namespace ORB_SLAM
 

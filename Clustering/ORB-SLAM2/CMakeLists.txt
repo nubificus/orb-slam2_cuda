@@ -26,7 +26,13 @@ SET(CUDA_HOST_COMPILER /usr/bin/g++)
 LIST(APPEND CUDA_NVCC_FLAGS "--compiler-options -fno-strict-aliasing -use_fast_math")
 
 # Ensure correct architecture
-LIST(APPEND CUDA_NVCC_FLAGS "-gencode=arch=compute_87,code=sm_87")
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+  message(STATUS "Building for Jetson (ARM64)")
+  LIST(APPEND CUDA_NVCC_FLAGS "-gencode=arch=compute_87,code=sm_87")
+else()
+  message(STATUS "Building for Desktop RTX")
+  LIST(APPEND CUDA_NVCC_FLAGS "-gencode=arch=compute_75,code=sm_75")
+endif()
 
 # Check C++11 or C++0x support
 include(CheckCXXCompilerFlag)

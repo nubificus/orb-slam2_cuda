@@ -74,7 +74,7 @@ public:
     // Use this function if you have deactivated local mapping and you only want to localize the camera.
     void InformOnlyTracking(const bool &flag);
 
-
+    void Shutdown();
 public:
 
     // Tracking states

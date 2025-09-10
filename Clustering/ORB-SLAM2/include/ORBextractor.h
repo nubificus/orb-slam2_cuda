@@ -32,8 +32,8 @@
 #ifdef VACCEL
 #include <vaccel.h>
 
-extern struct vaccel_session sess;
-extern struct vaccel_resource lib_res;
+extern struct vaccel_session sess[2];
+extern struct vaccel_resource lib_res[2];
 #endif
 
 namespace ORB_SLAM2
