@@ -1612,8 +1612,8 @@ namespace ORB_SLAM2
     {
         int ret = 0;
         int args_cnt = -1;
-        struct vaccel_arg rargs[3];
-        struct vaccel_arg wargs[3];
+        struct vaccel_arg rargs[11];
+        struct vaccel_arg wargs[48];
 
         // #ifndef CPUONLY
         // char *library = "./liborb-gpu.so";
@@ -1625,28 +1625,194 @@ namespace ORB_SLAM2
         memset(rargs, 0, sizeof(rargs));
         memset(wargs, 0, sizeof(wargs));
 
-        size_t image_size = get_mat_size(image);
-        rargs[0].size = image_size;
-        rargs[0].buf = serialize_mat_new(image, rargs[0].buf, image_size);
+        // size_t image_size = get_mat_size(image);
+        // args[0].size = image_size;
+        // args[0].buf = serialize_mat_new(image, args[0].buf, image_size);
+        // Mat
+        rargs[++args_cnt].size = sizeof(int);
+        rargs[args_cnt].buf = (int*)&(image.rows);
+        rargs[++args_cnt].size = sizeof(int);
+        rargs[args_cnt].buf = (int*)&(image.cols);
+        rargs[++args_cnt].size = sizeof(int);
+        uint t = image.type();
+        rargs[args_cnt].buf = &t;
+        size_t image_size = image.total()*image.elemSize();
+        rargs[++args_cnt].size = sizeof(int);
+        rargs[args_cnt].buf = &image_size;
+        rargs[++args_cnt].size = image_size;
+        rargs[args_cnt].buf = image.data;
 
-        size_t mask_size = get_mat_size(mask);
-        rargs[1].size = mask_size;
-        rargs[1].buf = serialize_mat_new(mask, rargs[1].buf, mask_size);
+        // size_t mask_size = get_mat_size(mask);
+        // args[1].size = mask_size;
+        // args[1].buf = serialize_mat_new(mask, args[1].buf, mask_size);
+        // Mat
+        rargs[++args_cnt].size = sizeof(int);
+        rargs[args_cnt].buf = (int*)&(mask.rows);
+        rargs[++args_cnt].size = sizeof(int);
+        rargs[args_cnt].buf = (int*)&(mask.cols);
+        rargs[++args_cnt].size = sizeof(int);
+        t = mask.type();
+        rargs[args_cnt].buf = &t;
+        image_size = mask.total()*mask.elemSize();
+        rargs[++args_cnt].size = sizeof(int);
+        rargs[args_cnt].buf = &image_size;
+        rargs[++args_cnt].size = image_size;
+        rargs[args_cnt].buf = mask.data;
 
-        rargs[2].size = sizeof(int);
-        rargs[2].buf = (uint8_t*)&session_id;
+        // args[2].size = sizeof(int);
+        // args[2].buf = (uint8_t*)&session_id;
+        rargs[++args_cnt].size = sizeof(int);
+        rargs[args_cnt].buf = &session_id;
 
-        wargs[0].buf = malloc(56736); //malloc(2026*sizeof(KeyPoint) + sizeof(size_t));
-        wargs[0].size = 56736; //sizeof(size_t) + 2026*sizeof(KeyPoint);
-        
-        wargs[1].buf = malloc(64928); //malloc(2026*32*sizeof(CV_8U));
-        wargs[1].size = 64928; //2026*32*sizeof(CV_8U);
-        
+        args_cnt = -1;
+        // args[3].buf = malloc(56736); //malloc(2026*sizeof(KeyPoint) + sizeof(size_t));
+        // args[3].size = 56736; //sizeof(size_t) + 2026*sizeof(KeyPoint);
+        // Vec of Keypoints
+        size_t vec_size = 2026;
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = &vec_size;
+        wargs[++args_cnt].size = vec_size*sizeof(KeyPoint);
+        wargs[args_cnt].buf = malloc(vec_size*sizeof(KeyPoint));
+
+        // args[4].buf = malloc(64928); //malloc(2026*32*sizeof(CV_8U));
+        // args[4].size = 64928; //2026*32*sizeof(CV_8U);
+        // Mat
+        int descriptor_sizes[4];
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = &descriptor_sizes[0];   //malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = &descriptor_sizes[1];   //malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = &descriptor_sizes[2];   //malloc(sizeof(int));
+        // image_size = mask.total()*mask.elemSize();
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = &descriptor_sizes[3];   //malloc(sizeof(int));
+        wargs[++args_cnt].size = 64832;
+        wargs[args_cnt].buf = malloc(64832);
+
         // // args[5].buf = malloc(sizeof(size_t)+(370*1226)+(308*1022)+(257*851)+(214*709)+(178*591)+(149*493)+(124*411)+(103*342));
-        wargs[2].buf = malloc(1404442); //malloc(sizeof(size_t)+(370*1226)*8);
-        wargs[2].size = 1404442; //sizeof(size_t)+(370*1226)*8;
+        // args[5].buf = malloc(1404442); //malloc(sizeof(size_t)+(370*1226)*8);
+        // args[5].size = 1404442; //sizeof(size_t)+(370*1226)*8;
+        // Vec of Mat
+        int pyr_data_sizes[]={453620, 314776, 218707, 151726, 105198, 73457, 50964, 35226};
+        int pyr_sizes[8][4];
+        int pyr_vec_size;
 
-        ret = vaccel_exec_with_resource(&(sess[session_id]), &(lib_res[session_id]), operation , &rargs[0], 3, &wargs[0], 3);
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = &pyr_vec_size;    //malloc(sizeof(int));
+
+        for (int i = 0; i < 8; i++) {
+            wargs[++args_cnt].size = sizeof(int);
+            wargs[args_cnt].buf = &pyr_sizes[i][0];    //malloc(sizeof(int));
+            wargs[++args_cnt].size = sizeof(int);
+            wargs[args_cnt].buf = &pyr_sizes[i][1];    //malloc(sizeof(int));
+            wargs[++args_cnt].size = sizeof(int);
+            wargs[args_cnt].buf = &pyr_sizes[i][2];    //malloc(sizeof(int));
+            // image_size = mask.total()*mask.elemSize();
+            wargs[++args_cnt].size = sizeof(int);
+            wargs[args_cnt].buf = &pyr_sizes[i][3];    //malloc(sizeof(int));
+            wargs[++args_cnt].size = pyr_data_sizes[i];
+            wargs[args_cnt].buf = malloc(pyr_data_sizes[i]);
+        }
+
+        /*
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        // image_size = mask.total()*mask.elemSize();
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = 453620;
+        wargs[args_cnt].buf = malloc(453620);
+
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        // image_size = mask.total()*mask.elemSize();
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = 314776;
+        wargs[args_cnt].buf = malloc(314776);
+
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        // image_size = mask.total()*mask.elemSize();
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = 218707;
+        wargs[args_cnt].buf = malloc(218707);
+
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        // image_size = mask.total()*mask.elemSize();
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = 151726;
+        wargs[args_cnt].buf = malloc(151726);
+
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        // image_size = mask.total()*mask.elemSize();
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = 105198;
+        wargs[args_cnt].buf = malloc(105198);
+
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        // image_size = mask.total()*mask.elemSize();
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = 73457;
+        wargs[args_cnt].buf = malloc(73457);
+
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        // image_size = mask.total()*mask.elemSize();
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = 50964;
+        wargs[args_cnt].buf = malloc(50964);
+
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        // image_size = mask.total()*mask.elemSize();
+        wargs[++args_cnt].size = sizeof(int);
+        wargs[args_cnt].buf = malloc(sizeof(int));
+        wargs[++args_cnt].size = 35226;
+        wargs[args_cnt].buf = malloc(35226);*/
+
+        ret = vaccel_exec_with_resource(&(sess[session_id]), &(lib_res[session_id]), operation , &rargs[0], 11, &wargs[0], 48);
         if (ret) {
             fprintf(stderr, "Could not execute function: %d\n", ret);
             vaccel_session_release(&(sess[session_id]));
@@ -1660,18 +1826,45 @@ namespace ORB_SLAM2
         }*/
 
         // std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-        deserialize_vec_of_keypoints(wargs[0].buf, wargs[0].size, keypoints);
-        deserialize_mat(wargs[1].buf, wargs[1].size, descriptors);
-        deserialize_vec_of_mat(wargs[2].buf, wargs[2].size, mvImagePyramid);
-                
+        // deserialize_vec_of_keypoints(wargs[1].buf,wargs[1].size,keypoints);
+        size_t keypoints_size = *reinterpret_cast<int*>(wargs[0].buf);
+        keypoints.resize(keypoints_size);
+        // keypoints.data() = wargs[1].buf;
+        memcpy(keypoints.data(), (char*)wargs[1].buf, keypoints_size * sizeof(cv::KeyPoint));
+
+        // std::cout << *reinterpret_cast<uint*>(wargs[2].buf) << "\t"
+        //     << *reinterpret_cast<uint*>(wargs[3].buf) << "\t"
+        //     << *reinterpret_cast<uint*>(wargs[4].buf) << std::endl;
+        // deserialize_mat(args[4].buf, args[4].size, descriptors);
+        descriptors.create(*reinterpret_cast<uint*>(wargs[2].buf), *reinterpret_cast<uint*>(wargs[3].buf), *reinterpret_cast<uint*>(wargs[4].buf));
+        // descriptors.data = wargs[6].buf;
+        memcpy(descriptors.data, wargs[6].buf, wargs[6].size);
+
+        // deserialize_vec_of_mat(args[5].buf, args[5].size, mvImagePyramid);
+        args_cnt = 7;
+        mvImagePyramid.resize(*reinterpret_cast<int*>(wargs[7].buf));
+        for (int i = 0; i < *reinterpret_cast<int*>(wargs[7].buf); i++) {
+            mvImagePyramid[i].create(*reinterpret_cast<int*>(wargs[++args_cnt].buf), *reinterpret_cast<int*>(wargs[++args_cnt].buf), *reinterpret_cast<int*>(wargs[++args_cnt].buf));
+            size_t sz = *reinterpret_cast<int*>(wargs[++args_cnt].buf);
+            memcpy(mvImagePyramid[i].data, (uchar*)wargs[++args_cnt].buf, sz);
+        }
+        
         // std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
 
         // double tdeser= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
         // std::cout << "deserialization: " << tdeser << std::endl;
         
-        free(wargs[0].buf);
         free(wargs[1].buf);
-        free(wargs[2].buf);
+        free(wargs[6].buf);
+        free(wargs[12].buf);
+        free(wargs[17].buf);
+        free(wargs[22].buf);
+        free(wargs[27].buf);
+        free(wargs[32].buf);
+        free(wargs[37].buf);
+        free(wargs[42].buf);
+        free(wargs[47].buf);
+        // free(args[5].buf);
 
         // std::cout << "[VACCEL HOST] Received pyr with " << pyr.size() << " levels\n";
         // for (size_t i = 0; i < pyr.size(); ++i)
